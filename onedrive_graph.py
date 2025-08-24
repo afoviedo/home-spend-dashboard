@@ -52,6 +52,7 @@ class OneDriveGraphConnector:
             _ = st.secrets["AZURE_CLIENT_ID"]  # Test de acceso
             redirect_uri = "https://myhomespend.streamlit.app/callback"
             st.info(f"🌐 Entorno: Streamlit Cloud (detectado) - Redirect URI: {redirect_uri}")
+            st.write(f"🔧 Debug: Commit actual - 002a62b con /callback incluido")
             return redirect_uri
         except:
             # Fallback para desarrollo local
