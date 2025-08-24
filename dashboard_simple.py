@@ -23,6 +23,24 @@ st.set_page_config(
 # Cargar variables de entorno
 load_dotenv()
 
+# Configuración para Streamlit Cloud
+if "STREAMLIT_CLOUD" in os.environ:
+    # En Streamlit Cloud, usar st.secrets en lugar de .env
+    try:
+        AZURE_CLIENT_ID = st.secrets["AZURE_CLIENT_ID"]
+        AZURE_CLIENT_SECRET = st.secrets["AZURE_CLIENT_SECRET"] 
+        AZURE_TENANT_ID = st.secrets["AZURE_TENANT_ID"]
+        ONEDRIVE_FILENAME = st.secrets["ONEDRIVE_FILENAME"]
+    except KeyError as e:
+        st.error(f"❌ Variable de entorno faltante: {e}")
+        st.stop()
+else:
+    # En desarrollo local, usar variables de entorno
+    AZURE_CLIENT_ID = os.getenv('AZURE_CLIENT_ID')
+    AZURE_CLIENT_SECRET = os.getenv('AZURE_CLIENT_SECRET')
+    AZURE_TENANT_ID = os.getenv('AZURE_TENANT_ID')
+    ONEDRIVE_FILENAME = os.getenv('ONEDRIVE_FILENAME')
+
 # CSS personalizado
 st.markdown("""
 <style>
@@ -316,7 +334,8 @@ def load_data():
         st.error("❌ Error de configuración")
         return None
         
-    filename = os.getenv('ONEDRIVE_FILENAME', 'HomeSpend.xlsx')
+    # Usar las variables globales configuradas al inicio
+    filename = ONEDRIVE_FILENAME or 'HomeSpend.xlsx'
     
     try:
         df_raw = connector.get_excel_data(st.session_state['access_token'], filename)

@@ -283,9 +283,21 @@ def init_graph_connection() -> Optional[OneDriveGraphConnector]:
     Returns:
         Conector configurado o None si faltan credenciales
     """
-    client_id = os.getenv('AZURE_CLIENT_ID')
-    client_secret = os.getenv('AZURE_CLIENT_SECRET')
-    tenant_id = os.getenv('AZURE_TENANT_ID')
+    # Verificar si estamos en Streamlit Cloud
+    if "STREAMLIT_CLOUD" in os.environ:
+        import streamlit as st
+        try:
+            client_id = st.secrets["AZURE_CLIENT_ID"]
+            client_secret = st.secrets["AZURE_CLIENT_SECRET"]
+            tenant_id = st.secrets["AZURE_TENANT_ID"]
+        except KeyError as e:
+            st.error(f"❌ Variable de entorno faltante en Streamlit Cloud: {e}")
+            return None
+    else:
+        # En desarrollo local
+        client_id = os.getenv('AZURE_CLIENT_ID')
+        client_secret = os.getenv('AZURE_CLIENT_SECRET')
+        tenant_id = os.getenv('AZURE_TENANT_ID')
     
     if not all([client_id, client_secret, tenant_id]):
         st.warning("⚠️ Configuración de Azure incompleta. Revisa las variables de entorno.")
