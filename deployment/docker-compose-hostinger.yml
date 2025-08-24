@@ -1,0 +1,91 @@
+version: '3.8'
+
+# Docker Compose optimizado para Hostinger VPS (compatible con N8N existente)
+
+services:
+  # Dashboard de gastos del hogar
+  dashboard:
+    build: 
+      context: ..
+      dockerfile: deployment/Dockerfile
+    container_name: home-spend-dashboard
+    restart: unless-stopped
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+      - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
+    env_file:
+      - .env
+    ports:
+      - "8502:8501"  # Puerto 8502 para evitar conflicto con N8N
+    volumes:
+      - dashboard_data:/app/data
+      - dashboard_logs:/app/logs
+    networks:
+      - dashboard-network
+      - hostinger-shared  # Red compartida para comunicación con N8N si es necesario
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Proxy reverso con Nginx (optimizado para Hostinger)
+  nginx:
+    image: nginx:alpine
+    container_name: home-spend-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"   # Puerto 8080 para HTTP (evitar conflictos)
+      - "8443:443"  # Puerto 8443 para HTTPS (evitar conflictos)
+    volumes:
+      - ./nginx/nginx-hostinger.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_cache:/var/cache/nginx
+    networks:
+      - dashboard-network
+      - hostinger-shared
+    depends_on:
+      - dashboard
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+# Volúmenes persistentes
+volumes:
+  dashboard_data:
+    driver: local
+  dashboard_logs:
+    driver: local
+  nginx_cache:
+    driver: local
+
+# Redes
+networks:
+  # Red interna para el dashboard
+  dashboard-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16  # Subred diferente para evitar conflictos
+
+  # Red compartida con otros servicios de Hostinger (como N8N)
+  hostinger-shared:
+    external: true
+    name: hostinger_default  # Intentar conectar con red existente de N8N

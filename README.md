@@ -1,56 +1,38 @@
-# 🏠 Dashboard de Gastos del Hogar
+# Dashboard de Gastos del Hogar 💰
 
-Dashboard interactivo desarrollado con Streamlit para gestionar y visualizar gastos familiares, integrado con Microsoft OneDrive para sincronización automática de datos.
+Un dashboard interactivo creado con Streamlit para analizar y visualizar gastos personales desde OneDrive con autenticación Microsoft Graph API.
 
-## ✨ Características
+## Características ✨
 
-- 🔐 **Autenticación segura** con Microsoft Graph API
+- 🔐 **Autenticación Microsoft Graph** - OAuth 2.0 seguro
 - 📊 **Visualizaciones interactivas** con Plotly
-- 🔄 **Sincronización automática** desde OneDrive
-- 📱 **Diseño responsivo** para cualquier dispositivo
-- � **Filtros avanzados** por fecha, categoría y responsable
-- 📈 **Métricas en tiempo real** con comparaciones
-- 🤖 **Asignación inteligente** de responsables
-- 💰 **Gestión automática** de gastos fijos mensuales
-- 📅 **Numeración personalizada** de semanas
+- 🔄 **Conexión directa a OneDrive** - lee archivos Excel automáticamente
+- 🎛️ **Filtros avanzados** por fecha, responsable, banco y monto
+- 📱 **Diseño responsivo** que funciona en móviles y escritorio
+- 📈 **Métricas en tiempo real** y tendencias
+- 🚀 **Múltiples opciones de deployment** - local, VPS, Docker, Azure
 
-## 🚀 Instalación
+## 🚀 Inicio Rápido (Desarrollo Local)
 
-### Prerrequisitos
-
-- Python 3.8 o superior
-- Cuenta de Microsoft con OneDrive
-- Aplicación registrada en Azure Portal
-
-### 1. Clonar el repositorio
-
-```bash
-git clone https://github.com/tu-usuario/home-spend-dashboard.git
-cd home-spend-dashboard
-```
-
-### 2. Crear entorno virtual
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
-```
-
-### 3. Instalar dependencias
+### 1. Instalar dependencias
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configurar variables de entorno
+### 2. Configurar OAuth Microsoft Graph
 
 1. Copia el archivo `.env.example` a `.env`:
 ```bash
 copy .env.example .env
 ```
 
-2. Edita el archivo `.env` con tus datos:
+2. Configura tu aplicación en Azure Portal:
+   - Ve a **App registrations** → **New registration**
+   - Agrega **Redirect URI**: `http://localhost:8501/callback`
+   - Copia `CLIENT_ID`, `CLIENT_SECRET`, `TENANT_ID`
+
+3. Edita el archivo `.env` con tus datos:
 
 ```env
 # URL de tu archivo Excel (debe ser accesible públicamente)
@@ -175,13 +157,146 @@ Home Spend/
 └── README.md           # Este archivo
 ```
 
-## Seguridad 🔒
+### 3. Ejecutar localmente
 
-- Las contraseñas se almacenan usando hash bcrypt
-- Las variables sensibles se mantienen en archivos `.env`
-- El archivo `.env` está excluido del control de versiones
+```bash
+# Opción 1: Script automático (Windows)
+ejecutar_dashboard.bat
 
-## Contribuciones 🤝
+# Opción 2: Interfaz web
+# Abrir launcher.html en el navegador
+
+# Opción 3: Manual
+streamlit run dashboard_simple.py
+```
+
+El dashboard estará disponible en `http://localhost:8501`
+
+## � Deployment en Producción
+
+### 🐳 Opción 1: Docker en VPS (RECOMENDADO)
+
+La forma más fácil de hostear en tu propio servidor:
+
+```bash
+# 1. Subir proyecto al VPS
+git clone https://github.com/tu-usuario/home-spend-dashboard.git
+cd home-spend-dashboard/deployment
+
+# 2. Configurar dominio
+nano deploy-docker-auto.sh  # Cambiar tu-dominio.com por tu dominio real
+
+# 3. Ejecutar instalación automática
+chmod +x deploy-docker-auto.sh
+./deploy-docker-auto.sh
+```
+
+**¡Eso es todo!** Tu dashboard estará en `https://tu-dominio.com` con SSL automático.
+
+#### Administración súper fácil:
+```bash
+./admin.sh          # Panel de administración visual
+./admin.sh status    # Ver estado
+./admin.sh logs      # Ver logs
+./admin.sh update    # Actualizar aplicación
+./admin.sh backup    # Hacer backup
+```
+
+### 🌟 Opción 2: Azure App Service
+
+Para deployment managed en Azure:
+
+1. Crea App Service en Azure Portal
+2. Configura deployment desde GitHub
+3. Agrega variables de entorno en Azure
+4. ¡Listo!
+
+### 📖 Documentación completa de deployment:
+
+- **🐳 Docker (súper fácil):** [`deployment/DOCKER-SIMPLE.md`](deployment/DOCKER-SIMPLE.md)
+- **📋 Guía completa VPS:** [`GUIA_DEPLOYMENT_VPS.md`](GUIA_DEPLOYMENT_VPS.md)
+- **🎯 Resumen ejecutivo:** [`deployment/RESUMEN-DEPLOYMENT.md`](deployment/RESUMEN-DEPLOYMENT.md)
+
+## 📱 Funcionalidades del Dashboard
+
+### 🔐 Autenticación Microsoft Graph
+- OAuth 2.0 seguro con Microsoft
+- Acceso directo a OneDrive
+- Sin contraseñas que recordar
+
+### 📊 Visualizaciones Interactivas
+- **Métricas en tiempo real:** Total gastos, gastos del mes, promedio diario
+- **Gráficos de tendencias:** Evolución temporal de gastos
+- **Distribución circular:** Gastos por responsable
+- **Análisis por categorías:** Bancos, ubicaciones, tipos de negocio
+
+### 🎛️ Filtros Avanzados
+- **Rango de fechas** personalizable
+- **Responsable** específico
+- **Banco** particular
+- **Rango de montos**
+- **Tipo de negocio**
+
+### 📋 Vista de Datos
+- Tabla detallada y filtrable
+- Exportación de datos
+- Ordenamiento personalizable
+
+## ⚙️ Configuración Avanzada
+
+### Personalizar carpeta OneDrive
+```env
+ONEDRIVE_FOLDER_PATH=/Casa  # Cambiar por tu carpeta
+```
+
+### Configurar entorno de producción
+```env
+ENVIRONMENT=production
+DEBUG=false
+REDIRECT_URI=https://tu-dominio.com/callback
+```
+
+## 🔒 Seguridad
+
+### Incluida automáticamente:
+- ✅ **OAuth 2.0** con Microsoft Graph
+- ✅ **HTTPS obligatorio** en producción
+- ✅ **Variables de entorno** para credenciales
+- ✅ **Headers de seguridad** 
+- ✅ **Rate limiting**
+- ✅ **Firewall automático**
+
+## 🆘 Troubleshooting
+
+### Dashboard no carga:
+```bash
+# Ver logs (Docker)
+./admin.sh logs
+
+# Ver logs (local)
+streamlit run dashboard_simple.py
+```
+
+### OAuth no funciona:
+1. Verifica REDIRECT_URI en Azure Portal
+2. Verifica variables en `.env`
+3. Confirma que el dominio funcione
+
+### Performance:
+```bash
+# Ver uso de recursos (Docker)
+./admin.sh status
+```
+
+## 📈 Roadmap
+
+- [ ] Dashboard de Analytics avanzado
+- [ ] Alertas automáticas de gastos
+- [ ] Integración con más fuentes de datos
+- [ ] App móvil nativa
+- [ ] Predicciones con Machine Learning
+
+## 🤝 Contribuciones
 
 Para contribuir al proyecto:
 
@@ -190,10 +305,17 @@ Para contribuir al proyecto:
 3. Haz commit de tus cambios
 4. Crea un Pull Request
 
-## Licencia 📄
+## 📄 Licencia
 
 Este proyecto está bajo la Licencia MIT.
 
 ---
 
-¿Necesitas ayuda? ¡Abre un issue en el repositorio!
+## 🎯 Links importantes
+
+- **📊 Dashboard en vivo:** `https://tu-dominio.com` (después del deployment)
+- **📚 Documentación Docker:** [`deployment/DOCKER-SIMPLE.md`](deployment/DOCKER-SIMPLE.md)
+- **🎛️ Panel de administración:** `./admin.sh` (en el servidor)
+- **🔄 OAuth callback:** `https://tu-dominio.com/callback`
+
+**¿Necesitas ayuda? ¡Abre un issue en el repositorio!** 🚀
