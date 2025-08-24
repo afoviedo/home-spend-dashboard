@@ -246,8 +246,18 @@ class OneDriveGraphConnector:
                 st.error(f"❌ Error descargando '{filename}'")
                 return None
             
-            # Leer Excel
-            df = pd.read_excel(BytesIO(file_content))
+            # Leer Excel con motor específico
+            try:
+                # Intentar con openpyxl para archivos .xlsx
+                df = pd.read_excel(BytesIO(file_content), engine='openpyxl')
+            except Exception:
+                try:
+                    # Fallback con xlrd para archivos .xls
+                    df = pd.read_excel(BytesIO(file_content), engine='xlrd')
+                except Exception:
+                    # Último intento sin especificar motor
+                    df = pd.read_excel(BytesIO(file_content))
+            
             st.success(f"✅ Archivo '{filename}' cargado exitosamente ({len(df)} filas)")
             
             return df
