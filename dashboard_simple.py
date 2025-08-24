@@ -9,7 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import numpy as np
-from onedrive_graph import OneDriveConnector
+from onedrive_graph import load_spending_data
 
 # Configuración de la página
 st.set_page_config(
@@ -134,8 +134,7 @@ def main():
         
         # Intentar cargar datos desde OneDrive
         try:
-            connector = OneDriveConnector()
-            df = connector.load_spending_data()
+            df = load_spending_data()
             
             if df is None:
                 st.warning("⚠️ No se pudieron cargar los datos de OneDrive. Cambia al Modo Demo para ver el dashboard funcionando.")
