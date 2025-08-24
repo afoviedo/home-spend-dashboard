@@ -50,7 +50,7 @@ class OneDriveGraphConnector:
             import streamlit as st
             # Intentar acceder a secrets - si funciona, estamos en Streamlit Cloud
             _ = st.secrets["AZURE_CLIENT_ID"]  # Test de acceso
-            redirect_uri = "https://myhomespend.streamlit.app"
+            redirect_uri = "https://myhomespend.streamlit.app/callback"
             st.info(f"🌐 Entorno: Streamlit Cloud (detectado) - Redirect URI: {redirect_uri}")
             return redirect_uri
         except:
