@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Gastos del Hogar - Launcher</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 50px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 600px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+        }
+        .emoji {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 10px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+        .btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .btn-secondary {
+            background: #764ba2;
+        }
+        .btn-secondary:hover {
+            background: #6a4190;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .instructions {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="emoji">🏠💰</div>
+        <h1>Dashboard de Gastos del Hogar</h1>
+        <p>Ejecuta tu dashboard de gastos localmente con un solo clic</p>
+        
+        <div id="status" class="status"></div>
+        
+        <button class="btn" onclick="launchDashboard()">
+            🚀 Ejecutar Dashboard
+        </button>
+        
+        <a href="http://localhost:8501" target="_blank" class="btn btn-secondary">
+            🌐 Ir al Dashboard (si ya está ejecutándose)
+        </a>
+        
+        <div class="instructions">
+            <h3>📋 Instrucciones:</h3>
+            <ol>
+                <li><strong>Primera vez:</strong> Haz clic en "Ejecutar Dashboard"</li>
+                <li><strong>Espera:</strong> Se abrirá una ventana de comandos</li>
+                <li><strong>Automático:</strong> Tu navegador se abrirá en http://localhost:8501</li>
+                <li><strong>¡Listo!</strong> Ya puedes usar tu dashboard</li>
+            </ol>
+            <p><strong>💡 Tip:</strong> Guarda esta página en favoritos para acceso rápido</p>
+        </div>
+    </div>
+
+    <script>
+        function launchDashboard() {
+            const status = document.getElementById('status');
+            
+            try {
+                // Intentar ejecutar el archivo batch
+                const link = document.createElement('a');
+                link.href = 'ejecutar_dashboard.bat';
+                link.click();
+                
+                status.className = 'status success';
+                status.style.display = 'block';
+                status.innerHTML = '✅ Dashboard iniciado. Se abrirá una ventana de comandos y luego tu navegador.';
+                
+                // Intentar abrir el dashboard después de unos segundos
+                setTimeout(() => {
+                    window.open('http://localhost:8501', '_blank');
+                }, 5000);
+                
+            } catch (error) {
+                status.className = 'status error';
+                status.style.display = 'block';
+                status.innerHTML = '❌ Error al ejecutar. Ejecuta manualmente el archivo "ejecutar_dashboard.bat"';
+            }
+        }
+        
+        // Verificar si el dashboard ya está ejecutándose
+        function checkDashboard() {
+            fetch('http://localhost:8501')
+                .then(response => {
+                    if (response.ok) {
+                        const status = document.getElementById('status');
+                        status.className = 'status success';
+                        status.style.display = 'block';
+                        status.innerHTML = '✅ El dashboard ya está ejecutándose en http://localhost:8501';
+                    }
+                })
+                .catch(() => {
+                    // Dashboard no está ejecutándose, esto es normal
+                });
+        }
+        
+        // Verificar al cargar la página
+        window.onload = checkDashboard;
+    </script>
+</body>
+</html>
