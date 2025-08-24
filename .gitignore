@@ -1,0 +1,79 @@
+# Archivos de entorno con secretos y tokens
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+
+# Archivos de configuración con tokens/secrets
+config.json
+secrets.json
+credentials.json
+
+# Archivos específicos de Azure
+.azure/
+
+# Cache de autenticación de Microsoft
+.ms_token_cache.json
+token_cache.json
+.token_temp
+
+# Directorios de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+
+# Entorno virtual
+.venv/
+venv/
+ENV/
+env/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de IDE
+.vscode/settings.json
+.idea/
+
+# Archivos temporales de Excel
+~$*.xlsx
+~$*.xls
+*.xlsx
+homespend_downloaded.xlsx
+datos_ejemplo.xlsx
+
+# Logs
+*.log
+logs/
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Archivos de backup
+*.bak
+*.backup
+
+# Archivos temporales de debugging y testing
+debug_*.py
+test_*.py
+deep_test_*.py
+diagnose_*.py
+fix_*.py
+try_*.py
+extract_*.py
+get_token.py
+upload_instructions.py
+*_downloaded.*
+downloaded_file_*
+*.bin
+
+# Documentación temporal
+CONFIGURACION_RAPIDA.md
+SOLUCION_ONEDRIVE.md
