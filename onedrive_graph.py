@@ -1,6 +1,6 @@
 """
 Módulo para conectar con OneDrive usando Microsoft Graph API
-Utiliza device code flow para compatibilidad con Streamlit Cloud
+Requiere configuración previa en Azure Portal
 """
 
 import msal
@@ -14,15 +14,17 @@ import time
 
 
 class OneDriveGraphConnector:
-    def __init__(self, client_id: str, tenant_id: str):
+    def __init__(self, client_id: str, client_secret: str, tenant_id: str):
         """
         Inicializa el conector de Microsoft Graph
         
         Args:
             client_id: Application (client) ID de Azure
+            client_secret: Client secret de Azure
             tenant_id: Directory (tenant) ID de Azure
         """
         self.client_id = client_id
+        self.client_secret = client_secret
         self.tenant_id = tenant_id
         
         # Scopes necesarios para leer archivos
@@ -39,28 +41,18 @@ class OneDriveGraphConnector:
     
     def authenticate_device_flow(self):
         """
-        Autentica usando device code flow - versión simplificada
+        Autentica usando device code flow - más compatible con Streamlit Cloud
         """
         # Verificar si ya hay un token válido en session_state
         if "access_token" in st.session_state:
             return st.session_state["access_token"]
         
-        # Inicializar o recuperar el flow del session_state
-        if "device_flow" not in st.session_state:
-            # Iniciar device flow
-            try:
-                flow = self.app.initiate_device_flow(scopes=self.scopes)
-                
-                if "user_code" not in flow:
-                    st.error("❌ Error: No se pudo iniciar el flujo de autenticación")
-                    return None
-                
-                st.session_state["device_flow"] = flow
-            except Exception as e:
-                st.error(f"❌ Error iniciando autenticación: {str(e)}")
-                return None
-        else:
-            flow = st.session_state["device_flow"]
+        # Iniciar device flow
+        flow = self.app.initiate_device_flow(scopes=self.scopes)
+        
+        if "user_code" not in flow:
+            st.error("❌ Error: No se pudo iniciar el flujo de autenticación")
+            return None
         
         # Mostrar instrucciones al usuario
         st.info(f"""
@@ -72,75 +64,107 @@ class OneDriveGraphConnector:
         4. Regresa aquí y haz clic en "Verificar Autenticación"
         """)
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Botón para verificar si la autenticación se completó
-            if st.button("🔄 Verificar Autenticación"):
-                with st.spinner("🔍 Verificando autenticación..."):
-                    try:
-                        # Intentar obtener token con timeout corto
-                        result = self.app.acquire_token_by_device_flow(flow)
-                        
-                        if "access_token" in result:
-                            st.session_state["access_token"] = result["access_token"]
-                            # Limpiar el flow del session_state
-                            if "device_flow" in st.session_state:
-                                del st.session_state["device_flow"]
-                            st.success("✅ ¡Autenticación exitosa!")
-                            st.rerun()
-                            return result["access_token"]
-                        elif result.get("error") == "authorization_pending":
-                            st.warning("⏳ Aún no has completado la autenticación. Completa el proceso en Microsoft y vuelve a intentar.")
-                            return None
-                        else:
-                            st.error(f"❌ Error de autenticación: {result.get('error_description', 'Error desconocido')}")
-                            # Limpiar flow en caso de error
-                            if "device_flow" in st.session_state:
-                                del st.session_state["device_flow"]
-                            return None
-                    except Exception as e:
-                        st.error(f"❌ Error inesperado: {str(e)}")
-                        # Limpiar flow en caso de error
-                        if "device_flow" in st.session_state:
-                            del st.session_state["device_flow"]
-                        return None
-        
-        with col2:
-            # Botón para reiniciar el proceso
-            if st.button("🔄 Generar Nuevo Código"):
-                if "device_flow" in st.session_state:
-                    del st.session_state["device_flow"]
+        # Botón para verificar si la autenticación se completó
+        if st.button("🔄 Verificar Autenticación"):
+            result = self.app.acquire_token_by_device_flow(flow)
+            
+            if "access_token" in result:
+                st.session_state["access_token"] = result["access_token"]
+                st.success("✅ ¡Autenticación exitosa!")
                 st.rerun()
+                return result["access_token"]
+            else:
+                st.error(f"❌ Error de autenticación: {result.get('error_description', 'Error desconocido')}")
+                return None
         
         return None
-    
-    def get_user_info(self, access_token: str) -> Optional[Dict[str, Any]]:
         """
-        Obtiene información del usuario autenticado
+        Obtiene la URI de redirección correcta según el entorno
+        """
+        # Forzar uso de Streamlit Cloud en producción
+        try:
+            import streamlit as st
+            # Intentar acceder a secrets - si funciona, estamos en Streamlit Cloud
+            _ = st.secrets["AZURE_CLIENT_ID"]  # Test de acceso
+            redirect_uri = "https://myhomespend.streamlit.app/callback"
+            st.info(f"🌐 Entorno: Streamlit Cloud (detectado) - Redirect URI: {redirect_uri}")
+            st.write(f"🔧 Debug: Commit actual - 002a62b con /callback incluido")
+            return redirect_uri
+        except:
+            # Fallback para desarrollo local
+            redirect_uri = "http://localhost:8501/callback"
+            st.info(f"💻 Entorno: Local (fallback) - Redirect URI: {redirect_uri}")
+            return redirect_uri
+    
+    def get_auth_url(self) -> str:
+        """
+        Genera la URL de autorización para que el usuario se autentique
+        
+        Returns:
+            URL de autorización
+        """
+        auth_url = self.app.get_authorization_request_url(
+            scopes=self.scopes,
+            redirect_uri=self.get_redirect_uri()
+        )
+        return auth_url
+    
+    def get_token_from_code(self, auth_code: str) -> Optional[Dict[str, Any]]:
+        """
+        Intercambia el código de autorización por un token de acceso
         
         Args:
-            access_token: Token de acceso válido
+            auth_code: Código de autorización recibido del callback
             
         Returns:
-            Información del usuario o None si hay error
+            Token de acceso o None si hay error
         """
-        headers = {
-            'Authorization': f'Bearer {access_token}',
-            'Content-Type': 'application/json'
-        }
-        
         try:
-            response = requests.get(f"{self.graph_url}/me", headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            st.error(f"Error obteniendo información del usuario: {str(e)}")
+            result = self.app.acquire_token_by_authorization_code(
+                code=auth_code,
+                scopes=self.scopes,
+                redirect_uri=self.get_redirect_uri()
+            )
+            
+            if "access_token" in result:
+                return result
+            else:
+                st.error(f"Error obteniendo token: {result.get('error_description', 'Error desconocido')}")
+                return None
+                
+        except Exception as e:
+            st.error(f"Error en autenticación: {str(e)}")
+            return None
+    
+    def get_token_from_refresh(self, refresh_token: str) -> Optional[Dict[str, Any]]:
+        """
+        Renueva el token usando el refresh token
+        
+        Args:
+            refresh_token: Token de actualización
+            
+        Returns:
+            Nuevo token de acceso o None si hay error
+        """
+        try:
+            result = self.app.acquire_token_by_refresh_token(
+                refresh_token=refresh_token,
+                scopes=self.scopes
+            )
+            
+            if "access_token" in result:
+                return result
+            else:
+                st.error(f"Error renovando token: {result.get('error_description', 'Error desconocido')}")
+                return None
+                
+        except Exception as e:
+            st.error(f"Error renovando token: {str(e)}")
             return None
     
     def search_files(self, access_token: str, filename: str) -> Optional[Dict[str, Any]]:
         """
-        Busca archivos por nombre en OneDrive
+        Busca archivos por nombre en OneDrive (raíz y subdirectorios)
         
         Args:
             access_token: Token de acceso válido
@@ -155,35 +179,102 @@ class OneDriveGraphConnector:
         }
         
         try:
-            # Buscar archivo por nombre
-            search_url = f"{self.graph_url}/me/drive/search(q='{filename}')"
+            # Primero intentar buscar en la raíz
+            search_url = f"{self.graph_url}/me/drive/root/children"
             response = requests.get(search_url, headers=headers)
             response.raise_for_status()
             
             data = response.json()
-            files = data.get('value', [])
             
-            if files:
-                # Filtrar archivos exactos (no parciales)
-                exact_matches = [f for f in files if f['name'].lower() == filename.lower()]
-                if exact_matches:
-                    return exact_matches[0]
-                else:
-                    return files[0]  # Fallback al primer resultado
+            if data.get('value'):
+                # Buscar coincidencia exacta en la raíz
+                for item in data['value']:
+                    if item['name'].lower() == filename.lower():
+                        st.success(f"✅ Archivo encontrado en raíz: {item['name']}")
+                        return item
+                
+                # Buscar en carpetas comunes (Casa, Documents, etc.)
+                common_folders = ['casa', 'documents', 'documentos', 'home', 'archivos']
+                for item in data['value']:
+                    if item.get('folder') and item['name'].lower() in common_folders:
+                        st.info(f"🔍 Buscando en carpeta: {item['name']}")
+                        folder_result = self._search_in_folder(access_token, item['id'], filename)
+                        if folder_result:
+                            return folder_result
+            
+            # Si no se encuentra en carpetas específicas, usar búsqueda global
+            st.info(f"🔍 Buscando '{filename}' en todo OneDrive...")
+            search_url = f"{self.graph_url}/me/drive/root/search(q='{filename.replace('.xlsx', '')}')"
+            response = requests.get(search_url, headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            if data.get('value'):
+                # Buscar coincidencia exacta
+                for item in data['value']:
+                    if item['name'].lower() == filename.lower():
+                        st.success(f"✅ Archivo encontrado: {item['name']}")
+                        st.info(f"📂 Ubicación: {item.get('parentReference', {}).get('path', 'Raíz')}")
+                        return item
+                
+                # Si no hay coincidencia exacta, buscar archivos .xlsx similares
+                for item in data['value']:
+                    if item['name'].lower().endswith('.xlsx') and filename.lower().replace('.xlsx', '') in item['name'].lower():
+                        st.info(f"📄 Archivo similar encontrado: {item['name']}")
+                        st.info(f"📂 Ubicación: {item.get('parentReference', {}).get('path', 'Raíz')}")
+                        return item
+            
+            st.warning(f"⚠️ No se encontró el archivo: {filename}")
+            return None
+            
+        except requests.exceptions.RequestException as e:
+            st.error(f"❌ Error buscando archivo: {str(e)}")
+            return None
+    
+    def _search_in_folder(self, access_token: str, folder_id: str, filename: str) -> Optional[Dict[str, Any]]:
+        """
+        Busca un archivo en una carpeta específica
+        
+        Args:
+            access_token: Token de acceso válido
+            folder_id: ID de la carpeta donde buscar
+            filename: Nombre del archivo a buscar
+            
+        Returns:
+            Información del archivo o None si no se encuentra
+        """
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        try:
+            search_url = f"{self.graph_url}/me/drive/items/{folder_id}/children"
+            response = requests.get(search_url, headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            if data.get('value'):
+                for item in data['value']:
+                    if item['name'].lower() == filename.lower():
+                        st.success(f"✅ Archivo encontrado en carpeta: {item['name']}")
+                        return item
             
             return None
             
         except requests.exceptions.RequestException as e:
-            st.error(f"Error buscando archivo: {str(e)}")
+            st.warning(f"⚠️ Error buscando en carpeta: {str(e)}")
             return None
     
     def download_file(self, access_token: str, file_id: str) -> Optional[bytes]:
         """
-        Descarga un archivo de OneDrive
+        Descarga el contenido de un archivo
         
         Args:
             access_token: Token de acceso válido
-            file_id: ID del archivo a descargar
+            file_id: ID del archivo en OneDrive
             
         Returns:
             Contenido del archivo en bytes o None si hay error
@@ -192,8 +283,9 @@ class OneDriveGraphConnector:
             'Authorization': f'Bearer {access_token}'
         }
         
+        download_url = f"{self.graph_url}/me/drive/items/{file_id}/content"
+        
         try:
-            download_url = f"{self.graph_url}/me/drive/items/{file_id}/content"
             response = requests.get(download_url, headers=headers)
             response.raise_for_status()
             
@@ -203,78 +295,41 @@ class OneDriveGraphConnector:
             st.error(f"Error descargando archivo: {str(e)}")
             return None
     
-    def load_excel_from_onedrive(self, access_token: str, filename: str) -> Optional[pd.DataFrame]:
+    def get_excel_data(self, access_token: str, filename: str) -> Optional[pd.DataFrame]:
         """
-        Carga un archivo Excel desde OneDrive como DataFrame
+        Busca y descarga un archivo Excel, devolviendo un DataFrame
         
         Args:
             access_token: Token de acceso válido
             filename: Nombre del archivo Excel
             
         Returns:
-            DataFrame con los datos o None si hay error
+            DataFrame con los datos del Excel o None si hay error
         """
+        # Buscar el archivo
+        file_info = self.search_files(access_token, filename)
+        
+        if not file_info:
+            st.error(f"No se encontró el archivo: {filename}")
+            return None
+        
+        st.success(f"✅ Archivo encontrado: {file_info['name']}")
+        
+        # Descargar el archivo
+        file_content = self.download_file(access_token, file_info['id'])
+        
+        if not file_content:
+            st.error("Error descargando el archivo")
+            return None
+        
+        # Convertir a DataFrame
         try:
-            # Buscar archivo
-            file_info = self.search_files(access_token, filename)
-            if not file_info:
-                st.error(f"❌ Archivo '{filename}' no encontrado en OneDrive")
-                return None
-            
-            # Descargar archivo
-            file_content = self.download_file(access_token, file_info['id'])
-            if not file_content:
-                st.error(f"❌ Error descargando '{filename}'")
-                return None
-            
-            # Leer Excel con motor específico y manejo robusto de errores
-            df = None
-            
-            # Determinar el engine basado en la extensión del archivo
-            file_extension = filename.lower().split('.')[-1]
-            
-            if file_extension in ['xlsx', 'xlsm']:
-                # Para archivos .xlsx y .xlsm usar openpyxl
-                try:
-                    df = pd.read_excel(BytesIO(file_content), engine='openpyxl')
-                    st.success(f"✅ Archivo '{filename}' cargado con openpyxl")
-                except Exception as e:
-                    st.warning(f"⚠️ Error con openpyxl: {str(e)}")
-                    
-            elif file_extension == 'xls':
-                # Para archivos .xls usar xlrd
-                try:
-                    df = pd.read_excel(BytesIO(file_content), engine='xlrd')
-                    st.success(f"✅ Archivo '{filename}' cargado con xlrd")
-                except Exception as e:
-                    st.warning(f"⚠️ Error con xlrd: {str(e)}")
-            
-            # Si no se pudo cargar con el engine específico, intentar otros métodos
-            if df is None:
-                engines_to_try = ['openpyxl', 'xlrd', 'calamine']
-                
-                for engine in engines_to_try:
-                    try:
-                        df = pd.read_excel(BytesIO(file_content), engine=engine)
-                        st.success(f"✅ Archivo '{filename}' cargado exitosamente con {engine} ({len(df)} filas)")
-                        break
-                    except Exception as e:
-                        st.warning(f"⚠️ Falló {engine}: {str(e)}")
-                        continue
-                
-                # Último intento sin especificar engine
-                if df is None:
-                    try:
-                        df = pd.read_excel(BytesIO(file_content))
-                        st.success(f"✅ Archivo '{filename}' cargado con engine por defecto ({len(df)} filas)")
-                    except Exception as e:
-                        st.error(f"❌ Error final procesando Excel: {str(e)}")
-                        return None
-            
+            df = pd.read_excel(BytesIO(file_content))
+            st.success(f"✅ Archivo Excel cargado: {len(df)} filas")
             return df
             
         except Exception as e:
-            st.error(f"❌ Error general procesando archivo Excel: {str(e)}")
+            st.error(f"Error leyendo Excel: {str(e)}")
             return None
 
 
@@ -285,48 +340,60 @@ def init_graph_connection() -> Optional[OneDriveGraphConnector]:
     Returns:
         Conector configurado o None si faltan credenciales
     """
+    # Importar streamlit para ambos casos
+    import streamlit as st
+    
     # Intentar leer desde secrets primero (Streamlit Cloud)
     try:
         client_id = st.secrets["AZURE_CLIENT_ID"]
+        client_secret = st.secrets["AZURE_CLIENT_SECRET"]
         tenant_id = st.secrets["AZURE_TENANT_ID"]
         # Si llegamos aquí, estamos en Streamlit Cloud
-        st.info("🌐 Ejecutándose en Streamlit Cloud")
     except:
         # Fallback para desarrollo local
         client_id = os.getenv('AZURE_CLIENT_ID')
+        client_secret = os.getenv('AZURE_CLIENT_SECRET')
         tenant_id = os.getenv('AZURE_TENANT_ID')
-        st.info("💻 Ejecutándose en entorno local")
     
-    if not all([client_id, tenant_id]):
+    if not all([client_id, client_secret, tenant_id]):
         st.warning("⚠️ Configuración de Azure incompleta. Revisa las variables de entorno.")
         return None
     
-    return OneDriveGraphConnector(client_id, tenant_id)
+    return OneDriveGraphConnector(client_id, client_secret, tenant_id)
 
 
-def load_spending_data() -> Optional[pd.DataFrame]:
+def handle_oauth_callback():
     """
-    Función principal para cargar datos de gastos desde OneDrive
-    
-    Returns:
-        DataFrame con datos de gastos o None si hay error
+    Maneja el callback de OAuth cuando el usuario regresa de Microsoft
     """
-    # Inicializar conexión
-    connector = init_graph_connection()
-    if not connector:
-        return None
+    # Verificar si hay parámetros de query en la URL
+    query_params = st.query_params
     
-    # Autenticar usuario
-    access_token = connector.authenticate_device_flow()
-    if not access_token:
-        st.warning("🔑 Necesitas autenticarte para acceder a tus datos de OneDrive")
-        return None
+    if 'code' in query_params:
+        auth_code = query_params['code']
+        
+        # Inicializar conexión
+        connector = init_graph_connection()
+        if not connector:
+            return None
+        
+        # Obtener token
+        token_data = connector.get_token_from_code(auth_code)
+        
+        if token_data and 'access_token' in token_data:
+            # Guardar tokens en session state
+            st.session_state['access_token'] = token_data['access_token']
+            if 'refresh_token' in token_data:
+                st.session_state['refresh_token'] = token_data['refresh_token']
+            
+            # Limpiar los parámetros de la URL para evitar loops
+            st.query_params.clear()
+            
+            st.success("✅ Autenticación exitosa con Microsoft!")
+            st.rerun()
+            return token_data
+        else:
+            st.error("❌ Error obteniendo token de acceso")
+            return None
     
-    # Obtener nombre del archivo desde configuración
-    try:
-        filename = st.secrets.get("ONEDRIVE_FILENAME", "HomeSpend.xlsx")
-    except:
-        filename = os.getenv("ONEDRIVE_FILENAME", "HomeSpend.xlsx")
-    
-    # Cargar datos
-    return connector.load_excel_from_onedrive(access_token, filename)
+    return None
