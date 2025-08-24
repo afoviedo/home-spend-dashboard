@@ -26,27 +26,13 @@ class OneDriveGraphConnector:
         self.client_secret = client_secret
         self.tenant_id = tenant_id
         
-        # Obtener redirect URI según el entorno - usar la variable STREAMLIT_CLOUD de secrets
-        try:
-            # Intentar leer desde secrets primero (Streamlit Cloud)
-            import streamlit as st
-            streamlit_cloud = st.secrets.get("STREAMLIT_CLOUD", "false").lower() == "true"
-            if streamlit_cloud:
-                self.redirect_uri = st.secrets.get("AZURE_REDIRECT_URI", "https://myhomespend.streamlit.app")
-                st.info(f"🌐 Entorno: Streamlit Cloud (desde secrets) - Redirect URI: {self.redirect_uri}")
-            else:
-                self.redirect_uri = "http://localhost:8501/callback"
-                st.info(f"💻 Entorno: Local (secrets STREAMLIT_CLOUD=false) - Redirect URI: {self.redirect_uri}")
-        except:
-            # Fallback para desarrollo local sin secrets
-            self.redirect_uri = "http://localhost:8501/callback"
-            st.info(f"💻 Entorno: Local (sin secrets) - Redirect URI: {self.redirect_uri}")
-        
         # Scopes necesarios para leer archivos
         self.scopes = ["https://graph.microsoft.com/Files.Read.All"]
         
         # URL base de Microsoft Graph
         self.graph_url = "https://graph.microsoft.com/v1.0"
+        
+        # El redirect_uri se determinará dinámicamente al momento de usarlo
         
         # Configurar MSAL
         self.app = msal.ConfidentialClientApplication(
@@ -54,6 +40,26 @@ class OneDriveGraphConnector:
             client_credential=self.client_secret,
             authority=f"https://login.microsoftonline.com/{self.tenant_id}"
         )
+    
+    def get_redirect_uri(self):
+        """
+        Obtiene la URI de redirección correcta según el entorno
+        """
+        try:
+            # Intentar leer desde secrets (Streamlit Cloud)
+            import streamlit as st
+            streamlit_cloud = st.secrets.get("STREAMLIT_CLOUD", "false").lower() == "true"
+            if streamlit_cloud:
+                redirect_uri = st.secrets.get("AZURE_REDIRECT_URI", "https://myhomespend.streamlit.app")
+                st.info(f"🌐 Entorno: Streamlit Cloud - Redirect URI: {redirect_uri}")
+                return redirect_uri
+            else:
+                st.info(f"💻 Entorno: Local (STREAMLIT_CLOUD=false) - Redirect URI: http://localhost:8501/callback")
+                return "http://localhost:8501/callback"
+        except:
+            # Fallback para desarrollo local sin secrets
+            st.info(f"💻 Entorno: Local (sin secrets) - Redirect URI: http://localhost:8501/callback")
+            return "http://localhost:8501/callback"
     
     def get_auth_url(self) -> str:
         """
@@ -64,7 +70,7 @@ class OneDriveGraphConnector:
         """
         auth_url = self.app.get_authorization_request_url(
             scopes=self.scopes,
-            redirect_uri=self.redirect_uri
+            redirect_uri=self.get_redirect_uri()
         )
         return auth_url
     
@@ -82,7 +88,7 @@ class OneDriveGraphConnector:
             result = self.app.acquire_token_by_authorization_code(
                 code=auth_code,
                 scopes=self.scopes,
-                redirect_uri=self.redirect_uri
+                redirect_uri=self.get_redirect_uri()
             )
             
             if "access_token" in result:
