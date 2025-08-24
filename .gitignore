@@ -1,24 +1,7 @@
-# Archivos de entorno con secretos y tokens
+# Archivos de configuración sensibles
 .env
-.env.local
-.env.production
-.env.staging
-.env.development
 
-# Archivos de configuración con tokens/secrets
-config.json
-secrets.json
-credentials.json
-
-# Archivos específicos de Azure
-.azure/
-
-# Cache de autenticación de Microsoft
-.ms_token_cache.json
-token_cache.json
-.token_temp
-
-# Directorios de Python
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -28,52 +11,46 @@ __pycache__/
 .pytest_cache/
 .coverage
 
-# Entorno virtual
+# Entornos virtuales
 .venv/
 venv/
-ENV/
 env/
 
-# Archivos del sistema
+# Sistema operativo
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Archivos de IDE
-.vscode/settings.json
-.idea/
+# Archivos temporales del dashboard
+.token_temp
+*.tmp
+*.temp
 
-# Archivos temporales de Excel
-~$*.xlsx
-~$*.xls
-*.xlsx
-homespend_downloaded.xlsx
+# Archivos de descarga y pruebas
+downloaded_file_*
+*_downloaded.*
+test_*.py
+debug_*.py
+fix_*.py
+diagnose_*.py
+try_*.py
+extract_*.py
+check_*.py
+setup.py
+
+# Archivos de datos temporales
 datos_ejemplo.xlsx
+homespend_downloaded.xlsx
 
 # Logs
 *.log
 logs/
 
-# Streamlit secrets
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cache de Streamlit
 .streamlit/secrets.toml
-
-# Archivos de backup
-*.bak
-*.backup
-
-# Archivos temporales de debugging y testing
-debug_*.py
-test_*.py
-deep_test_*.py
-diagnose_*.py
-fix_*.py
-try_*.py
-extract_*.py
-get_token.py
-upload_instructions.py
-*_downloaded.*
-downloaded_file_*
-*.bin
-
-# Documentación temporal
-CONFIGURACION_RAPIDA.md
-SOLUCION_ONEDRIVE.md
