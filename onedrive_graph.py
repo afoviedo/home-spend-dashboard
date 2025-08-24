@@ -26,6 +26,12 @@ class OneDriveGraphConnector:
         self.client_secret = client_secret
         self.tenant_id = tenant_id
         
+        # Obtener redirect URI según el entorno
+        if "STREAMLIT_CLOUD" in os.environ:
+            self.redirect_uri = os.getenv('AZURE_REDIRECT_URI', 'https://myhomespend.streamlit.app')
+        else:
+            self.redirect_uri = "http://localhost:8501/callback"
+        
         # Scopes necesarios para leer archivos
         self.scopes = ["https://graph.microsoft.com/Files.Read.All"]
         
@@ -48,7 +54,7 @@ class OneDriveGraphConnector:
         """
         auth_url = self.app.get_authorization_request_url(
             scopes=self.scopes,
-            redirect_uri="http://localhost:8501/callback"
+            redirect_uri=self.redirect_uri
         )
         return auth_url
     
@@ -66,7 +72,7 @@ class OneDriveGraphConnector:
             result = self.app.acquire_token_by_authorization_code(
                 code=auth_code,
                 scopes=self.scopes,
-                redirect_uri="http://localhost:8501/callback"
+                redirect_uri=self.redirect_uri
             )
             
             if "access_token" in result:
