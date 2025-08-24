@@ -283,9 +283,11 @@ def init_graph_connection() -> Optional[OneDriveGraphConnector]:
     Returns:
         Conector configurado o None si faltan credenciales
     """
+    # Importar streamlit para ambos casos
+    import streamlit as st
+    
     # Verificar si estamos en Streamlit Cloud
     if "STREAMLIT_CLOUD" in os.environ:
-        import streamlit as st
         try:
             client_id = st.secrets["AZURE_CLIENT_ID"]
             client_secret = st.secrets["AZURE_CLIENT_SECRET"]
