@@ -1,0 +1,10 @@
+# Configuración para Streamlit Cloud
+# Este archivo debe estar en .streamlit/config.toml
+
+[server]
+headless = true
+port = $PORT
+enableCORS = false
+
+[browser]
+gatherUsageStats = false
