@@ -227,24 +227,54 @@ class OneDriveGraphConnector:
                 st.error(f"❌ Error descargando '{filename}'")
                 return None
             
-            # Leer Excel con motor específico
-            try:
-                # Intentar con openpyxl para archivos .xlsx
-                df = pd.read_excel(BytesIO(file_content), engine='openpyxl')
-            except Exception:
-                try:
-                    # Fallback con xlrd para archivos .xls
-                    df = pd.read_excel(BytesIO(file_content), engine='xlrd')
-                except Exception:
-                    # Último intento sin especificar motor
-                    df = pd.read_excel(BytesIO(file_content))
+            # Leer Excel con motor específico y manejo robusto de errores
+            df = None
             
-            st.success(f"✅ Archivo '{filename}' cargado exitosamente ({len(df)} filas)")
+            # Determinar el engine basado en la extensión del archivo
+            file_extension = filename.lower().split('.')[-1]
+            
+            if file_extension in ['xlsx', 'xlsm']:
+                # Para archivos .xlsx y .xlsm usar openpyxl
+                try:
+                    df = pd.read_excel(BytesIO(file_content), engine='openpyxl')
+                    st.success(f"✅ Archivo '{filename}' cargado con openpyxl")
+                except Exception as e:
+                    st.warning(f"⚠️ Error con openpyxl: {str(e)}")
+                    
+            elif file_extension == 'xls':
+                # Para archivos .xls usar xlrd
+                try:
+                    df = pd.read_excel(BytesIO(file_content), engine='xlrd')
+                    st.success(f"✅ Archivo '{filename}' cargado con xlrd")
+                except Exception as e:
+                    st.warning(f"⚠️ Error con xlrd: {str(e)}")
+            
+            # Si no se pudo cargar con el engine específico, intentar otros métodos
+            if df is None:
+                engines_to_try = ['openpyxl', 'xlrd', 'calamine']
+                
+                for engine in engines_to_try:
+                    try:
+                        df = pd.read_excel(BytesIO(file_content), engine=engine)
+                        st.success(f"✅ Archivo '{filename}' cargado exitosamente con {engine} ({len(df)} filas)")
+                        break
+                    except Exception as e:
+                        st.warning(f"⚠️ Falló {engine}: {str(e)}")
+                        continue
+                
+                # Último intento sin especificar engine
+                if df is None:
+                    try:
+                        df = pd.read_excel(BytesIO(file_content))
+                        st.success(f"✅ Archivo '{filename}' cargado con engine por defecto ({len(df)} filas)")
+                    except Exception as e:
+                        st.error(f"❌ Error final procesando Excel: {str(e)}")
+                        return None
             
             return df
             
         except Exception as e:
-            st.error(f"❌ Error procesando archivo Excel: {str(e)}")
+            st.error(f"❌ Error general procesando archivo Excel: {str(e)}")
             return None
 
 
