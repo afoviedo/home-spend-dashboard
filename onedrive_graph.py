@@ -45,21 +45,19 @@ class OneDriveGraphConnector:
         """
         Obtiene la URI de redirección correcta según el entorno
         """
+        # Forzar uso de Streamlit Cloud en producción
         try:
-            # Intentar leer desde secrets (Streamlit Cloud)
             import streamlit as st
-            streamlit_cloud = st.secrets.get("STREAMLIT_CLOUD", "false").lower() == "true"
-            if streamlit_cloud:
-                redirect_uri = st.secrets.get("AZURE_REDIRECT_URI", "https://myhomespend.streamlit.app")
-                st.info(f"🌐 Entorno: Streamlit Cloud - Redirect URI: {redirect_uri}")
-                return redirect_uri
-            else:
-                st.info(f"💻 Entorno: Local (STREAMLIT_CLOUD=false) - Redirect URI: http://localhost:8501/callback")
-                return "http://localhost:8501/callback"
+            # Intentar acceder a secrets - si funciona, estamos en Streamlit Cloud
+            _ = st.secrets["AZURE_CLIENT_ID"]  # Test de acceso
+            redirect_uri = "https://myhomespend.streamlit.app"
+            st.info(f"🌐 Entorno: Streamlit Cloud (detectado) - Redirect URI: {redirect_uri}")
+            return redirect_uri
         except:
-            # Fallback para desarrollo local sin secrets
-            st.info(f"💻 Entorno: Local (sin secrets) - Redirect URI: http://localhost:8501/callback")
-            return "http://localhost:8501/callback"
+            # Fallback para desarrollo local
+            redirect_uri = "http://localhost:8501/callback"
+            st.info(f"💻 Entorno: Local (fallback) - Redirect URI: {redirect_uri}")
+            return redirect_uri
     
     def get_auth_url(self) -> str:
         """
@@ -308,31 +306,17 @@ def init_graph_connection() -> Optional[OneDriveGraphConnector]:
     # Importar streamlit para ambos casos
     import streamlit as st
     
-    # Verificar si estamos en Streamlit Cloud usando la variable STREAMLIT_CLOUD de secrets
+    # Intentar leer desde secrets primero (Streamlit Cloud)
     try:
-        # Intentar leer desde secrets (Streamlit Cloud)
-        streamlit_cloud = st.secrets.get("STREAMLIT_CLOUD", "false").lower() == "true"
-        if streamlit_cloud:
-            try:
-                client_id = st.secrets["AZURE_CLIENT_ID"]
-                client_secret = st.secrets["AZURE_CLIENT_SECRET"]
-                tenant_id = st.secrets["AZURE_TENANT_ID"]
-                st.info("✅ Detectado entorno Streamlit Cloud - usando secrets")
-            except KeyError as e:
-                st.error(f"❌ Variable de entorno faltante en Streamlit Cloud: {e}")
-                return None
-        else:
-            # En desarrollo local - leer desde variables de entorno
-            client_id = os.getenv('AZURE_CLIENT_ID')
-            client_secret = os.getenv('AZURE_CLIENT_SECRET')
-            tenant_id = os.getenv('AZURE_TENANT_ID')
-            st.info("💻 Detectado entorno local - usando variables de entorno")
+        client_id = st.secrets["AZURE_CLIENT_ID"]
+        client_secret = st.secrets["AZURE_CLIENT_SECRET"]
+        tenant_id = st.secrets["AZURE_TENANT_ID"]
+        # Si llegamos aquí, estamos en Streamlit Cloud
     except:
-        # Fallback para desarrollo local sin secrets
+        # Fallback para desarrollo local
         client_id = os.getenv('AZURE_CLIENT_ID')
         client_secret = os.getenv('AZURE_CLIENT_SECRET')
         tenant_id = os.getenv('AZURE_TENANT_ID')
-        st.info("💻 Fallback a entorno local - usando variables de entorno")
     
     if not all([client_id, client_secret, tenant_id]):
         st.warning("⚠️ Configuración de Azure incompleta. Revisa las variables de entorno.")
