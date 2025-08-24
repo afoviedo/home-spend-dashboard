@@ -26,11 +26,20 @@ class OneDriveGraphConnector:
         self.client_secret = client_secret
         self.tenant_id = tenant_id
         
-        # Obtener redirect URI según el entorno
-        if "STREAMLIT_CLOUD" in os.environ:
+        # Obtener redirect URI según el entorno - usar múltiples métodos de detección
+        is_streamlit_cloud = (
+            "STREAMLIT_CLOUD" in os.environ or 
+            "STREAMLIT_SHARING" in os.environ or
+            "streamlit.app" in os.environ.get("HOSTNAME", "") or
+            os.environ.get("STREAMLIT_SERVER_PORT") is not None
+        )
+        
+        if is_streamlit_cloud:
             self.redirect_uri = os.getenv('AZURE_REDIRECT_URI', 'https://myhomespend.streamlit.app')
+            st.info(f"🌐 Entorno: Streamlit Cloud - Redirect URI: {self.redirect_uri}")
         else:
             self.redirect_uri = "http://localhost:8501/callback"
+            st.info(f"💻 Entorno: Local - Redirect URI: {self.redirect_uri}")
         
         # Scopes necesarios para leer archivos
         self.scopes = ["https://graph.microsoft.com/Files.Read.All"]
@@ -292,12 +301,20 @@ def init_graph_connection() -> Optional[OneDriveGraphConnector]:
     # Importar streamlit para ambos casos
     import streamlit as st
     
-    # Verificar si estamos en Streamlit Cloud
-    if "STREAMLIT_CLOUD" in os.environ:
+    # Verificar si estamos en Streamlit Cloud - usar múltiples métodos de detección
+    is_streamlit_cloud = (
+        "STREAMLIT_CLOUD" in os.environ or 
+        "STREAMLIT_SHARING" in os.environ or
+        "streamlit.app" in os.environ.get("HOSTNAME", "") or
+        os.environ.get("STREAMLIT_SERVER_PORT") is not None
+    )
+    
+    if is_streamlit_cloud:
         try:
             client_id = st.secrets["AZURE_CLIENT_ID"]
             client_secret = st.secrets["AZURE_CLIENT_SECRET"]
             tenant_id = st.secrets["AZURE_TENANT_ID"]
+            st.info("✅ Detectado entorno Streamlit Cloud - usando secrets")
         except KeyError as e:
             st.error(f"❌ Variable de entorno faltante en Streamlit Cloud: {e}")
             return None
