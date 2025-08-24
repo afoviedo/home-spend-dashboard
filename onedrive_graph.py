@@ -39,7 +39,7 @@ class OneDriveGraphConnector:
     
     def authenticate_device_flow(self):
         """
-        Autentica usando device code flow - más compatible con Streamlit Cloud
+        Autentica usando device code flow - versión simplificada
         """
         # Verificar si ya hay un token válido en session_state
         if "access_token" in st.session_state:
@@ -48,13 +48,17 @@ class OneDriveGraphConnector:
         # Inicializar o recuperar el flow del session_state
         if "device_flow" not in st.session_state:
             # Iniciar device flow
-            flow = self.app.initiate_device_flow(scopes=self.scopes)
-            
-            if "user_code" not in flow:
-                st.error("❌ Error: No se pudo iniciar el flujo de autenticación")
+            try:
+                flow = self.app.initiate_device_flow(scopes=self.scopes)
+                
+                if "user_code" not in flow:
+                    st.error("❌ Error: No se pudo iniciar el flujo de autenticación")
+                    return None
+                
+                st.session_state["device_flow"] = flow
+            except Exception as e:
+                st.error(f"❌ Error iniciando autenticación: {str(e)}")
                 return None
-            
-            st.session_state["device_flow"] = flow
         else:
             flow = st.session_state["device_flow"]
         
@@ -75,6 +79,7 @@ class OneDriveGraphConnector:
             if st.button("🔄 Verificar Autenticación"):
                 with st.spinner("🔍 Verificando autenticación..."):
                     try:
+                        # Intentar obtener token con timeout corto
                         result = self.app.acquire_token_by_device_flow(flow)
                         
                         if "access_token" in result:
@@ -96,34 +101,10 @@ class OneDriveGraphConnector:
                             return None
                     except Exception as e:
                         st.error(f"❌ Error inesperado: {str(e)}")
+                        # Limpiar flow en caso de error
+                        if "device_flow" in st.session_state:
+                            del st.session_state["device_flow"]
                         return None
-            
-            # Auto-verificación cada 5 segundos si se muestra el código
-            if st.button("🔄 Auto-verificar (cada 5s)"):
-                placeholder = st.empty()
-                for i in range(12):  # 60 segundos máximo
-                    with placeholder.container():
-                        st.info(f"🔍 Auto-verificando... Intento {i+1}/12")
-                        try:
-                            result = self.app.acquire_token_by_device_flow(flow)
-                            
-                            if "access_token" in result:
-                                st.session_state["access_token"] = result["access_token"]
-                                if "device_flow" in st.session_state:
-                                    del st.session_state["device_flow"]
-                                st.success("✅ ¡Autenticación exitosa!")
-                                st.rerun()
-                                return result["access_token"]
-                            elif result.get("error") != "authorization_pending":
-                                st.error(f"❌ Error: {result.get('error_description', 'Error desconocido')}")
-                                break
-                        except Exception:
-                            pass
-                        
-                        if i < 11:  # No esperar en la última iteración
-                            time.sleep(5)
-                
-                placeholder.warning("⏳ Tiempo de espera agotado. Haz clic en 'Verificar Autenticación' manualmente.")
         
         with col2:
             # Botón para reiniciar el proceso
