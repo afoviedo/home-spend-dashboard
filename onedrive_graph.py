@@ -46,9 +46,10 @@ class OneDriveGraphConnector:
         Returns:
             URL de autorización
         """
+        redirect_uri = os.getenv('AZURE_REDIRECT_URI', 'http://localhost:8501/callback')
         auth_url = self.app.get_authorization_request_url(
             scopes=self.scopes,
-            redirect_uri="http://localhost:8501/callback"
+            redirect_uri=redirect_uri
         )
         return auth_url
     
@@ -63,10 +64,11 @@ class OneDriveGraphConnector:
             Token de acceso o None si hay error
         """
         try:
+            redirect_uri = os.getenv('AZURE_REDIRECT_URI', 'http://localhost:8501/callback')
             result = self.app.acquire_token_by_authorization_code(
                 code=auth_code,
                 scopes=self.scopes,
-                redirect_uri="http://localhost:8501/callback"
+                redirect_uri=redirect_uri
             )
             
             if "access_token" in result:
