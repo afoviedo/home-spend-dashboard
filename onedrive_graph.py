@@ -301,33 +301,69 @@ def handle_oauth_callback():
     Maneja el callback de OAuth cuando el usuario regresa de Microsoft
     """
     # Verificar si hay parámetros de query en la URL
-    query_params = st.query_params
-    
-    if 'code' in query_params:
-        auth_code = query_params['code']
+    try:
+        # Usar la nueva API de Streamlit para query params
+        query_params = st.query_params
         
-        # Inicializar conexión
-        connector = init_graph_connection()
-        if not connector:
-            return None
-        
-        # Obtener token
-        token_data = connector.get_token_from_code(auth_code)
-        
-        if token_data and 'access_token' in token_data:
-            # Guardar tokens en session state
-            st.session_state['access_token'] = token_data['access_token']
-            if 'refresh_token' in token_data:
-                st.session_state['refresh_token'] = token_data['refresh_token']
+        if 'code' in query_params:
+            auth_code = query_params['code']
             
-            # Limpiar los parámetros de la URL para evitar loops
-            st.query_params.clear()
+            # Inicializar conexión
+            connector = init_graph_connection()
+            if not connector:
+                return None
             
-            st.success("✅ Autenticación exitosa con Microsoft!")
-            st.rerun()
-            return token_data
-        else:
-            st.error("❌ Error obteniendo token de acceso")
+            # Obtener token
+            token_data = connector.get_token_from_code(auth_code)
+            
+            if token_data and 'access_token' in token_data:
+                # Guardar tokens en session state
+                st.session_state['access_token'] = token_data['access_token']
+                if 'refresh_token' in token_data:
+                    st.session_state['refresh_token'] = token_data['refresh_token']
+                
+                # Limpiar los parámetros de la URL para evitar loops
+                st.query_params.clear()
+                
+                st.success("✅ Autenticación exitosa con Microsoft!")
+                st.rerun()
+                return token_data
+            else:
+                st.error("❌ Error obteniendo token de acceso")
+                return None
+    except Exception as e:
+        # Fallback para versiones anteriores de Streamlit o errores
+        try:
+            query_params = st.experimental_get_query_params()
+            
+            if 'code' in query_params:
+                auth_code = query_params['code'][0] if isinstance(query_params['code'], list) else query_params['code']
+                
+                # Inicializar conexión
+                connector = init_graph_connection()
+                if not connector:
+                    return None
+                
+                # Obtener token
+                token_data = connector.get_token_from_code(auth_code)
+                
+                if token_data and 'access_token' in token_data:
+                    # Guardar tokens en session state
+                    st.session_state['access_token'] = token_data['access_token']
+                    if 'refresh_token' in token_data:
+                        st.session_state['refresh_token'] = token_data['refresh_token']
+                    
+                    # Limpiar los parámetros de la URL para evitar loops
+                    st.experimental_get_query_params().clear()
+                    
+                    st.success("✅ Autenticación exitosa con Microsoft!")
+                    st.rerun()
+                    return token_data
+                else:
+                    st.error("❌ Error obteniendo token de acceso")
+                    return None
+        except Exception as fallback_error:
+            st.error(f"❌ Error manejando callback: {str(fallback_error)}")
             return None
     
     return None
