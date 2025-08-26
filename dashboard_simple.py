@@ -9,6 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import os
+import requests
 from dotenv import load_dotenv
 from onedrive_graph import init_graph_connection, handle_oauth_callback
 
@@ -68,9 +69,32 @@ def check_microsoft_auth():
     # Manejar callback de OAuth si existe
     handle_oauth_callback()
     
-    # Si ya está autenticado con Microsoft, permitir acceso
+    # Si ya está autenticado con Microsoft, VALIDAR que el token funcione
     if st.session_state.get('access_token'):
-        # Mostrar información del usuario en sidebar
+        # Validar que el token realmente funcione haciendo una petición simple
+        connector = init_graph_connection()
+        if connector:
+            try:
+                # Intentar hacer una petición simple para validar el token
+                headers = {'Authorization': f"Bearer {st.session_state['access_token']}"}
+                response = requests.get('https://graph.microsoft.com/v1.0/me', headers=headers, timeout=5)
+                
+                if response.status_code == 401 or response.status_code == 403:
+                    # Token inválido - limpiar automáticamente y redirigir
+                    st.warning("🔄 Token expirado detectado. Limpiando automáticamente...")
+                    for key in list(st.session_state.keys()):
+                        del st.session_state[key]
+                    st.rerun()
+                    return False
+                    
+            except Exception:
+                # Si hay cualquier error en la validación, limpiar
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.rerun()
+                return False
+        
+        # Token válido - mostrar información del usuario en sidebar
         with st.sidebar:
             st.success(f"✅ Conectado como: {st.session_state.get('user_name', 'Usuario')}")
             if st.button("🚪 Cerrar Sesión Microsoft"):
@@ -123,16 +147,20 @@ def check_microsoft_auth():
             unsafe_allow_html=True
         )
         
-        # Botón para limpiar sesión en caso de errores
-        if st.button("🧹 Limpiar Sesión y Reconectar", help="Usar si hay errores de autenticación"):
-            # Limpiar toda la sesión
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            # Limpiar parámetros de URL
-            if hasattr(st, 'query_params'):
-                st.query_params.clear()
-            st.success("✅ Sesión limpiada. Puedes intentar autenticarte de nuevo.")
-            st.rerun()
+        st.markdown("---")
+        
+        # Botón para limpiar sesión en caso de errores - MUY VISIBLE
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🧹 LIMPIAR SESIÓN Y RECONECTAR", help="Usar si hay errores de autenticación", type="secondary"):
+                # Limpiar toda la sesión
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                # Limpiar parámetros de URL
+                if hasattr(st, 'query_params'):
+                    st.query_params.clear()
+                st.success("✅ Sesión limpiada. Puedes intentar autenticarte de nuevo.")
+                st.rerun()
         
         st.markdown("---")
         st.markdown("### ✨ Características del Dashboard:")
