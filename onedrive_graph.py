@@ -74,7 +74,21 @@ class OneDriveGraphConnector:
             if "access_token" in result:
                 return result
             else:
-                st.error(f"Error obteniendo token: {result.get('error_description', 'Error desconocido')}")
+                error_msg = result.get('error_description', 'Error desconocido')
+                # Si el código ya fue redimido, limpiar parámetros y sugerir reintentar
+                if "already redeemed" in error_msg or "AADSTS54005" in error_msg:
+                    st.warning("⚠️ El código de autorización ya fue usado. Limpiando sesión...")
+                    # Limpiar parámetros de la URL
+                    if hasattr(st, 'query_params'):
+                        st.query_params.clear()
+                    # Limpiar session state relacionado con auth
+                    for key in ['access_token', 'refresh_token', 'user_name']:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    st.info("✨ Sesión limpiada. Por favor, haz clic en 'Conectar con Microsoft' de nuevo.")
+                    st.rerun()
+                else:
+                    st.error(f"Error obteniendo token: {error_msg}")
                 return None
                 
         except Exception as e:

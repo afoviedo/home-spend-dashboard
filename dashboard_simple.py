@@ -123,6 +123,17 @@ def check_microsoft_auth():
             unsafe_allow_html=True
         )
         
+        # Botón para limpiar sesión en caso de errores
+        if st.button("🧹 Limpiar Sesión y Reconectar", help="Usar si hay errores de autenticación"):
+            # Limpiar toda la sesión
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            # Limpiar parámetros de URL
+            if hasattr(st, 'query_params'):
+                st.query_params.clear()
+            st.success("✅ Sesión limpiada. Puedes intentar autenticarte de nuevo.")
+            st.rerun()
+        
         st.markdown("---")
         st.markdown("### ✨ Características del Dashboard:")
         st.markdown("- 📊 Visualización en tiempo real de tus gastos")
