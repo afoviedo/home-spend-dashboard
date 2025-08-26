@@ -70,7 +70,7 @@ def check_microsoft_auth():
     handle_oauth_callback()
     
     # Si ya está autenticado con Microsoft, VALIDAR que el token funcione
-    if st.session_state.get('access_token'):
+    if st.session_state.get('access_token') and not st.session_state.get('token_validation_failed', False):
         # Validar que el token realmente funcione haciendo una petición simple
         connector = init_graph_connection()
         if connector:
@@ -80,17 +80,30 @@ def check_microsoft_auth():
                 response = requests.get('https://graph.microsoft.com/v1.0/me', headers=headers, timeout=5)
                 
                 if response.status_code == 401 or response.status_code == 403:
-                    # Token inválido - limpiar automáticamente y redirigir
-                    st.warning("🔄 Token expirado detectado. Limpiando automáticamente...")
-                    for key in list(st.session_state.keys()):
-                        del st.session_state[key]
-                    st.rerun()
+                    # Token inválido - marcar para limpiar pero no hacer rerun inmediato
+                    st.session_state['token_validation_failed'] = True
+                    st.warning("🔄 Token expirado detectado. Por favor, vuelve a autenticarte.")
+                    # Limpiar tokens pero mantener otros datos de sesión
+                    auth_keys = ['access_token', 'refresh_token', 'authenticated']
+                    for key in auth_keys:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    return False
+                else:
+                    # Token válido - limpiar flag si existía
+                    if 'token_validation_failed' in st.session_state:
+                        del st.session_state['token_validation_failed']
                     
-            except Exception:
-                # Si hay cualquier error en la validación, limpiar
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
+            except Exception as e:
+                # Si hay cualquier error en la validación, marcar como fallido
+                st.session_state['token_validation_failed'] = True
+                st.error(f"Error validando token: {str(e)}")
+                # Limpiar tokens
+                auth_keys = ['access_token', 'refresh_token', 'authenticated']
+                for key in auth_keys:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                return False
         
         # Token válido - mostrar información del usuario en sidebar
         with st.sidebar:
@@ -101,6 +114,10 @@ def check_microsoft_auth():
                     del st.session_state[key]
                 st.rerun()
         return True
+    
+    # Limpiar flag de validación fallida si existe
+    if 'token_validation_failed' in st.session_state:
+        del st.session_state['token_validation_failed']
     
     # Mostrar interfaz de autenticación Microsoft
     st.markdown('<h1 class="main-header">🏠 Dashboard de Gastos del Hogar</h1>', unsafe_allow_html=True)

@@ -79,24 +79,31 @@ class OneDriveGraphConnector:
                 
                 # Si el código ya fue redimido, limpiar automáticamente y redirigir
                 if "already redeemed" in error_msg or "AADSTS54005" in error_code or "AADSTS70008" in error_code:
-                    # Limpiar session state completamente
-                    if hasattr(st, 'session_state'):
-                        for key in list(st.session_state.keys()):
+                    # Evitar bucle infinito - verificar si ya estamos en proceso de limpieza
+                    if not st.session_state.get('oauth_cleaning_in_progress', False):
+                        st.session_state['oauth_cleaning_in_progress'] = True
+                        
+                        # Limpiar solo parámetros relacionados con OAuth
+                        oauth_keys = ['access_token', 'authenticated', 'auth_code', 'token_info']
+                        for key in oauth_keys:
                             if key in st.session_state:
                                 del st.session_state[key]
-                    
-                    # Limpiar parámetros de URL
-                    if hasattr(st, 'query_params'):
-                        st.query_params.clear()
-                    
-                    # Mostrar mensaje y redirigir automáticamente
-                    st.info("🔄 Detectado código OAuth usado. Limpiando automáticamente...")
-                    st.info("🚀 Redirigiendo a nueva autenticación...")
-                    
-                    # Generar nueva URL de autenticación y redirigir
-                    new_auth_url = self.get_auth_url()
-                    st.markdown(f'<meta http-equiv="refresh" content="2;url={new_auth_url}">', unsafe_allow_html=True)
-                    st.stop()
+                        
+                        # Limpiar parámetros de URL
+                        if hasattr(st, 'query_params'):
+                            st.query_params.clear()
+                        
+                        st.error("⚠️ El código de autorización ya fue usado. Por favor, vuelve a autenticarte.")
+                        st.info("👆 Usa el botón 'Iniciar Sesión con Microsoft' para continuar.")
+                        
+                        # Marcar que la limpieza está completa
+                        if 'oauth_cleaning_in_progress' in st.session_state:
+                            del st.session_state['oauth_cleaning_in_progress']
+                        
+                        return None
+                    else:
+                        # Ya estamos en proceso de limpieza, no hacer nada más
+                        return None
                 else:
                     st.error(f"Error obteniendo token: {error_msg}")
                 return None
@@ -335,26 +342,46 @@ def handle_oauth_callback():
             # Limpiar inmediatamente los parámetros para evitar re-uso
             st.query_params.clear()
             
-            # Inicializar conexión
-            connector = init_graph_connection()
-            if not connector:
+            # Verificar si ya estamos procesando para evitar bucles
+            if st.session_state.get('processing_oauth', False):
                 return None
             
-            # Obtener token - si falla aquí, ya se maneja automáticamente
-            token_data = connector.get_token_from_code(auth_code)
+            st.session_state['processing_oauth'] = True
             
-            if token_data and 'access_token' in token_data:
-                # Guardar tokens en session state
-                st.session_state['access_token'] = token_data['access_token']
-                if 'refresh_token' in token_data:
-                    st.session_state['refresh_token'] = token_data['refresh_token']
+            try:
+                # Inicializar conexión
+                connector = init_graph_connection()
+                if not connector:
+                    return None
                 
-                st.success("✅ Autenticación exitosa con Microsoft!")
-                st.rerun()
-                return token_data
-            else:
-                # Error ya manejado en get_token_from_code
+                # Obtener token - si falla aquí, ya se maneja automáticamente
+                token_data = connector.get_token_from_code(auth_code)
+                
+                if token_data and 'access_token' in token_data:
+                    # Guardar tokens en session state
+                    st.session_state['access_token'] = token_data['access_token']
+                    if 'refresh_token' in token_data:
+                        st.session_state['refresh_token'] = token_data['refresh_token']
+                    
+                    st.session_state['authenticated'] = True
+                    st.success("✅ Autenticación exitosa con Microsoft!")
+                    
+                    # Limpiar flag de procesamiento
+                    if 'processing_oauth' in st.session_state:
+                        del st.session_state['processing_oauth']
+                    
+                    return token_data
+                else:
+                    # Error ya manejado en get_token_from_code
+                    if 'processing_oauth' in st.session_state:
+                        del st.session_state['processing_oauth']
+                    return None
+            except Exception as e:
+                st.error(f"Error procesando autenticación: {str(e)}")
+                if 'processing_oauth' in st.session_state:
+                    del st.session_state['processing_oauth']
                 return None
+            
     except Exception as e:
         # Fallback para versiones anteriores de Streamlit o errores
         try:
