@@ -75,18 +75,28 @@ class OneDriveGraphConnector:
                 return result
             else:
                 error_msg = result.get('error_description', 'Error desconocido')
-                # Si el código ya fue redimido, limpiar parámetros y sugerir reintentar
-                if "already redeemed" in error_msg or "AADSTS54005" in error_msg:
-                    st.warning("⚠️ El código de autorización ya fue usado. Limpiando sesión...")
-                    # Limpiar parámetros de la URL
+                error_code = result.get('error', '')
+                
+                # Si el código ya fue redimido, limpiar automáticamente y redirigir
+                if "already redeemed" in error_msg or "AADSTS54005" in error_code or "AADSTS70008" in error_code:
+                    # Limpiar session state completamente
+                    if hasattr(st, 'session_state'):
+                        for key in list(st.session_state.keys()):
+                            if key in st.session_state:
+                                del st.session_state[key]
+                    
+                    # Limpiar parámetros de URL
                     if hasattr(st, 'query_params'):
                         st.query_params.clear()
-                    # Limpiar session state relacionado con auth
-                    for key in ['access_token', 'refresh_token', 'user_name']:
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    st.info("✨ Sesión limpiada. Por favor, haz clic en 'Conectar con Microsoft' de nuevo.")
-                    st.rerun()
+                    
+                    # Mostrar mensaje y redirigir automáticamente
+                    st.info("🔄 Detectado código OAuth usado. Limpiando automáticamente...")
+                    st.info("🚀 Redirigiendo a nueva autenticación...")
+                    
+                    # Generar nueva URL de autenticación y redirigir
+                    new_auth_url = self.get_auth_url()
+                    st.markdown(f'<meta http-equiv="refresh" content="2;url={new_auth_url}">', unsafe_allow_html=True)
+                    st.stop()
                 else:
                     st.error(f"Error obteniendo token: {error_msg}")
                 return None
@@ -322,12 +332,15 @@ def handle_oauth_callback():
         if 'code' in query_params:
             auth_code = query_params['code']
             
+            # Limpiar inmediatamente los parámetros para evitar re-uso
+            st.query_params.clear()
+            
             # Inicializar conexión
             connector = init_graph_connection()
             if not connector:
                 return None
             
-            # Obtener token
+            # Obtener token - si falla aquí, ya se maneja automáticamente
             token_data = connector.get_token_from_code(auth_code)
             
             if token_data and 'access_token' in token_data:
@@ -336,17 +349,11 @@ def handle_oauth_callback():
                 if 'refresh_token' in token_data:
                     st.session_state['refresh_token'] = token_data['refresh_token']
                 
-                # Limpiar los parámetros de la URL para evitar loops
-                st.query_params.clear()
-                
                 st.success("✅ Autenticación exitosa con Microsoft!")
                 st.rerun()
                 return token_data
             else:
-                # Si token_data es None, significa que hubo un error y ya se manejó en get_token_from_code
-                # Solo limpiar parámetros y session si no se manejó automáticamente
-                if 'code' in st.query_params:
-                    st.query_params.clear()
+                # Error ya manejado en get_token_from_code
                 return None
     except Exception as e:
         # Fallback para versiones anteriores de Streamlit o errores
