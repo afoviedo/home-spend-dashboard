@@ -343,7 +343,10 @@ def handle_oauth_callback():
                 st.rerun()
                 return token_data
             else:
-                st.error("❌ Error obteniendo token de acceso")
+                # Si token_data es None, significa que hubo un error y ya se manejó en get_token_from_code
+                # Solo limpiar parámetros y session si no se manejó automáticamente
+                if 'code' in st.query_params:
+                    st.query_params.clear()
                 return None
     except Exception as e:
         # Fallback para versiones anteriores de Streamlit o errores
