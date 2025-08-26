@@ -24,40 +24,6 @@ st.set_page_config(
 # Cargar variables de entorno
 load_dotenv()
 
-# FUNCIÓN DE LIMPIEZA AUTOMÁTICA DE URL AL CARGAR
-def auto_clean_url():
-    """Limpia automáticamente parámetros OAuth residuales de la URL"""
-    try:
-        # Verificar si hay parámetros problemáticos que pueden causar bucles
-        query_params = st.query_params
-        problematic_params = ['code', 'state', 'session_state', 'error']
-        
-        # Si hay parámetros pero no hay un token válido en sesión, pueden ser residuales
-        if any(param in query_params for param in problematic_params):
-            # Si no hay un token válido, estos parámetros son problemáticos
-            if not st.session_state.get('access_token'):
-                # Limpiar automáticamente sin notificar al usuario
-                st.markdown("""
-                <script>
-                    // Limpieza silenciosa de URL residual
-                    if (window.location.href.includes('code=') || window.location.href.includes('state=') || window.location.href.includes('error=')) {
-                        const url = new URL(window.location);
-                        url.searchParams.delete('code');
-                        url.searchParams.delete('state');
-                        url.searchParams.delete('session_state');
-                        url.searchParams.delete('error');
-                        url.searchParams.delete('error_description');
-                        window.history.replaceState({}, document.title, url.toString());
-                    }
-                </script>
-                """, unsafe_allow_html=True)
-                st.query_params.clear()
-    except:
-        pass
-
-# Ejecutar limpieza automática al cargar
-auto_clean_url()
-
 # CSS personalizado
 st.markdown("""
 <style>
@@ -98,38 +64,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def check_microsoft_auth():
-    """Verificar autenticación de Microsoft como único método de acceso"""
-    
-    # PRIMERO: Limpiar automáticamente cualquier parámetro OAuth en URL
-    try:
-        query_params = st.query_params
-        if any(param in query_params for param in ['code', 'state', 'session_state', 'error']):
-            # Hay parámetros OAuth en URL - procesarlos o limpiarlos
-            if 'error' in query_params:
-                # Error de OAuth - limpiar todo automáticamente
-                st.query_params.clear()
-                st.markdown("""
-                <script>
-                    const url = new URL(window.location);
-                    url.searchParams.delete('code');
-                    url.searchParams.delete('state');
-                    url.searchParams.delete('session_state');
-                    url.searchParams.delete('error');
-                    url.searchParams.delete('error_description');
-                    window.history.replaceState({}, document.title, url.toString());
-                    window.location.reload();
-                </script>
-                """, unsafe_allow_html=True)
-                return False
-    except:
-        pass
+    """Verificar autenticación de Microsoft - implementación simplificada y robusta"""
     
     # Manejar callback de OAuth si existe
     handle_oauth_callback()
     
     # Verificar si hay token válido
     if st.session_state.get('access_token'):
-        # Validar que el token realmente funcione
+        # Validar que el token funcione
         connector = init_graph_connection()
         if connector:
             try:
@@ -137,51 +79,29 @@ def check_microsoft_auth():
                 response = requests.get('https://graph.microsoft.com/v1.0/me', headers=headers, timeout=5)
                 
                 if response.status_code in [401, 403]:
-                    # Token inválido - limpiar automáticamente y generar nueva autenticación
-                    auth_keys = ['access_token', 'refresh_token', 'authenticated', 'last_processed_code']
+                    # Token inválido - limpiar y mostrar mensaje
+                    auth_keys = ['access_token', 'refresh_token', 'authenticated', 'last_processed_code', 'processing_oauth']
                     for key in auth_keys:
                         if key in st.session_state:
                             del st.session_state[key]
                     
-                    # Generar nueva autenticación automáticamente
-                    new_auth_url = connector.get_auth_url()
-                    st.markdown(f"""
-                    <script>
-                        setTimeout(function() {{
-                            window.location.href = '{new_auth_url}';
-                        }}, 1000);
-                    </script>
-                    """, unsafe_allow_html=True)
-                    
-                    st.info("🔄 Token expirado detectado. Redirigiendo a nueva autenticación...")
-                    st.stop()
+                    st.warning("🔄 Tu sesión ha expirado. Por favor, vuelve a autenticarte.")
+                    return False
                     
             except Exception:
-                # Error de conexión - limpiar y generar nueva autenticación
-                auth_keys = ['access_token', 'refresh_token', 'authenticated', 'last_processed_code']
+                # Error de conexión - limpiar
+                auth_keys = ['access_token', 'refresh_token', 'authenticated', 'last_processed_code', 'processing_oauth']
                 for key in auth_keys:
                     if key in st.session_state:
                         del st.session_state[key]
                 
-                connector = init_graph_connection()
-                if connector:
-                    new_auth_url = connector.get_auth_url()
-                    st.markdown(f"""
-                    <script>
-                        setTimeout(function() {{
-                            window.location.href = '{new_auth_url}';
-                        }}, 1000);
-                    </script>
-                    """, unsafe_allow_html=True)
-                    
-                    st.info("🔄 Error de conexión detectado. Redirigiendo a nueva autenticación...")
-                    st.stop()
+                st.warning("🔄 Error de conexión. Por favor, vuelve a autenticarte.")
+                return False
         
-        # Token válido - mostrar información del usuario en sidebar
+        # Token válido - mostrar información del usuario
         with st.sidebar:
             st.success(f"✅ Conectado como: {st.session_state.get('user_name', 'Usuario')}")
             if st.button("🚪 Cerrar Sesión Microsoft"):
-                # Limpiar toda la sesión
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
                 st.rerun()

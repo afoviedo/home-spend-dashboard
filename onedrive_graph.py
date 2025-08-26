@@ -77,45 +77,24 @@ class OneDriveGraphConnector:
                 error_msg = result.get('error_description', 'Error desconocido')
                 error_code = result.get('error', '')
                 
-                # Si el código ya fue redimido, limpiar automáticamente y recuperar
+                # Si el código ya fue redimido - implementar manejo según Microsoft best practices
                 if "already redeemed" in error_msg or "AADSTS54005" in error_code or "AADSTS70008" in error_code:
-                    # Limpiar este código usado de la sesión
-                    if 'last_processed_code' in st.session_state:
-                        del st.session_state['last_processed_code']
+                    # Este código ya fue usado - NO reintentarlo nunca
+                    # Limpiar completamente el estado OAuth
+                    _cleanup_oauth_state()
                     
-                    # Limpiar parámetros OAuth
-                    oauth_keys = ['access_token', 'authenticated', 'auth_code', 'token_info', 'processing_oauth']
-                    for key in oauth_keys:
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    
-                    # Limpiar parámetros de URL y forzar nueva autenticación
-                    if hasattr(st, 'query_params'):
+                    # Limpiar parámetros de URL si aún existen
+                    # Limpiar query params de forma compatible
+                    if hasattr(st, 'experimental_set_query_params'):
+                        st.experimental_set_query_params()
+                    elif hasattr(st, 'query_params'):
                         st.query_params.clear()
                     
-                    # Limpiar URL del navegador y generar nueva autenticación automáticamente
-                    new_auth_url = self.get_auth_url()
-                    st.markdown(f"""
-                    <script>
-                        // Limpiar URL de parámetros OAuth inmediatamente
-                        if (window.location.href.includes('code=') || window.location.href.includes('state=')) {{
-                            const url = new URL(window.location);
-                            url.searchParams.delete('code');
-                            url.searchParams.delete('state');
-                            url.searchParams.delete('session_state');
-                            window.history.replaceState({{}}, document.title, url.toString());
-                        }}
-                        
-                        // Mostrar mensaje y redirigir automáticamente
-                        setTimeout(function() {{
-                            window.location.href = '{new_auth_url}';
-                        }}, 1500);
-                    </script>
-                    """, unsafe_allow_html=True)
+                    # NO redirigir automáticamente - dejar que el usuario inicie manualmente
+                    st.error("⚠️ El código de autorización ya fue utilizado.")
+                    st.info("🔄 Por favor, haz clic en 'Iniciar Sesión con Microsoft' para obtener un nuevo código de autorización.")
                     
-                    st.info("🔄 Código OAuth detectado como usado. Generando nueva autenticación automáticamente...")
-                    st.info("⏳ Redirigiendo en 1.5 segundos...")
-                    st.stop()
+                    return None
                 else:
                     st.error(f"Error obteniendo token: {error_msg}")
                 return None
@@ -339,149 +318,84 @@ def init_graph_connection() -> Optional[OneDriveGraphConnector]:
     return OneDriveGraphConnector(client_id, client_secret, tenant_id)
 
 
+def _cleanup_oauth_state():
+    """Limpia el estado de OAuth de forma segura"""
+    keys_to_clean = ['processing_oauth', 'last_processed_code', 'access_token', 'refresh_token', 'authenticated']
+    for key in keys_to_clean:
+        if key in st.session_state:
+            del st.session_state[key]
+    return None
+
 def handle_oauth_callback():
     """
     Maneja el callback de OAuth cuando el usuario regresa de Microsoft
+    Implementa las mejores prácticas de Microsoft para evitar códigos reutilizados
     """
-    # Verificar si hay parámetros de query en la URL
     try:
-        # Usar la nueva API de Streamlit para query params
-        query_params = st.query_params
+        # Usar la API compatible con versiones anteriores de Streamlit
+        query_params = st.experimental_get_query_params()
         
         if 'code' in query_params:
-            auth_code = query_params['code']
+            auth_code = query_params['code'][0] if isinstance(query_params['code'], list) else query_params['code']
             
-            # CLAVE: Verificar si este código ya fue procesado
+            # Verificar si ya procesamos este código específico
             if st.session_state.get('last_processed_code') == auth_code:
-                # Este código ya fue procesado, limpiar URL y continuar
-                st.query_params.clear()
-                # Limpiar URL del navegador inmediatamente
-                st.markdown("""
-                <script>
-                    if (window.location.href.includes('code=')) {
-                        const url = new URL(window.location);
-                        url.searchParams.delete('code');
-                        url.searchParams.delete('state');
-                        url.searchParams.delete('session_state');
-                        window.history.replaceState({}, document.title, url.toString());
-                    }
-                </script>
-                """, unsafe_allow_html=True)
+                # Ya procesamos este código, retornar el token existente si lo hay
                 return st.session_state.get('access_token')
             
-            # Limpiar inmediatamente los parámetros para evitar re-uso
-            st.query_params.clear()
-            
-            # Marcar este código como procesado
-            st.session_state['last_processed_code'] = auth_code
-            
-            # Verificar si ya estamos procesando para evitar bucles
+            # Verificar si ya estamos procesando otro código
             if st.session_state.get('processing_oauth', False):
                 return None
             
+            # Marcar como procesando y registrar este código
             st.session_state['processing_oauth'] = True
+            st.session_state['last_processed_code'] = auth_code
+            
+            # IMPORTANTE: Limpiar INMEDIATAMENTE los parámetros para evitar reuso
+            st.experimental_set_query_params()
             
             try:
-                # Inicializar conexión
                 connector = init_graph_connection()
                 if not connector:
-                    if 'processing_oauth' in st.session_state:
-                        del st.session_state['processing_oauth']
-                    return None
+                    return _cleanup_oauth_state()
                 
-                # Obtener token
+                # Intentar obtener el token
                 token_data = connector.get_token_from_code(auth_code)
                 
                 if token_data and 'access_token' in token_data:
-                    # Guardar tokens en session state
+                    # Éxito - guardar tokens
                     st.session_state['access_token'] = token_data['access_token']
                     if 'refresh_token' in token_data:
                         st.session_state['refresh_token'] = token_data['refresh_token']
                     
                     st.session_state['authenticated'] = True
+                    st.session_state['processing_oauth'] = False
                     
-                    # Limpiar URL del navegador inmediatamente
-                    st.markdown("""
-                    <script>
-                        if (window.location.href.includes('code=')) {
-                            const url = new URL(window.location);
-                            url.searchParams.delete('code');
-                            url.searchParams.delete('state');
-                            url.searchParams.delete('session_state');
-                            window.history.replaceState({}, document.title, url.toString());
-                        }
-                    </script>
-                    """, unsafe_allow_html=True)
-                    
-                    # Limpiar flag de procesamiento
-                    if 'processing_oauth' in st.session_state:
-                        del st.session_state['processing_oauth']
-                    
+                    st.success("✅ Autenticación exitosa con Microsoft!")
                     return token_data
                 else:
-                    # Error en el token - limpiar y permitir reintento automático
-                    if 'processing_oauth' in st.session_state:
-                        del st.session_state['processing_oauth']
-                    if 'last_processed_code' in st.session_state:
-                        del st.session_state['last_processed_code']
-                    
-                    # Limpiar URL automáticamente y mostrar nueva autenticación
-                    st.markdown("""
-                    <script>
-                        if (window.location.href.includes('code=')) {
-                            const url = new URL(window.location);
-                            url.searchParams.delete('code');
-                            url.searchParams.delete('state');
-                            url.searchParams.delete('session_state');
-                            window.history.replaceState({}, document.title, url.toString());
-                            // Forzar recarga después de limpiar URL
-                            setTimeout(() => window.location.reload(), 100);
-                        }
-                    </script>
-                    """, unsafe_allow_html=True)
-                    return None
+                    # Error al obtener token - limpiar estado
+                    return _cleanup_oauth_state()
                     
             except Exception as e:
                 st.error(f"Error procesando autenticación: {str(e)}")
-                if 'processing_oauth' in st.session_state:
-                    del st.session_state['processing_oauth']
-                if 'last_processed_code' in st.session_state:
-                    del st.session_state['last_processed_code']
-                return None
+                return _cleanup_oauth_state()
+                
+        elif 'error' in query_params:
+            # Error de OAuth - limpiar y mostrar mensaje
+            error = query_params.get('error', ['unknown_error'])
+            error_desc = query_params.get('error_description', ['Error desconocido'])
+            
+            # Obtener el primer elemento si es lista
+            error = error[0] if isinstance(error, list) else error
+            error_desc = error_desc[0] if isinstance(error_desc, list) else error_desc
+            
+            st.experimental_set_query_params()
+            st.error(f"Error de autenticación: {error_desc}")
+            return None
             
     except Exception as e:
-        # Fallback para versiones anteriores de Streamlit o errores
-        try:
-            query_params = st.experimental_get_query_params()
-            
-            if 'code' in query_params:
-                auth_code = query_params['code'][0] if isinstance(query_params['code'], list) else query_params['code']
-                
-                # Inicializar conexión
-                connector = init_graph_connection()
-                if not connector:
-                    return None
-                
-                # Obtener token
-                token_data = connector.get_token_from_code(auth_code)
-                
-                if token_data and 'access_token' in token_data:
-                    # Guardar tokens en session state
-                    st.session_state['access_token'] = token_data['access_token']
-                    if 'refresh_token' in token_data:
-                        st.session_state['refresh_token'] = token_data['refresh_token']
-                    
-                    # Limpiar los parámetros de la URL para evitar loops
-                    st.experimental_get_query_params().clear()
-                    
-                    st.success("✅ Autenticación exitosa con Microsoft!")
-                    st.rerun()
-                    return token_data
-                else:
-                    st.error("❌ Error obteniendo token de acceso")
-                    return None
-        except Exception as fallback_error:
-            st.error(f"❌ Error manejando callback: {str(fallback_error)}")
-            return None
+        st.error(f"Error manejando callback OAuth: {str(e)}")
+        return None
     
     return None
