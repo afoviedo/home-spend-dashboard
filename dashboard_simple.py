@@ -85,14 +85,12 @@ def check_microsoft_auth():
                     for key in list(st.session_state.keys()):
                         del st.session_state[key]
                     st.rerun()
-                    return False
                     
             except Exception:
                 # Si hay cualquier error en la validación, limpiar
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
                 st.rerun()
-                return False
         
         # Token válido - mostrar información del usuario en sidebar
         with st.sidebar:
